@@ -1,5 +1,4 @@
-```yaml
-name: Build LiveActivitiesExample IPA
+name: Build Live Activity IPA
 
 on:
   workflow_dispatch:
@@ -15,12 +14,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode
+      - name: Show Xcode version
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
           xcodebuild -version
+          xcodebuild -showsdks
 
-      - name: Build iOS app
+      - name: Build iOS device app
         run: |
           xcodebuild \
             -project LiveActivitiesExample.xcodeproj \
@@ -33,19 +32,45 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
-      - name: Package IPA
+      - name: Inspect build products
         run: |
-          mkdir -p Payload
+          echo "=== Build products ==="
+          find build/Build/Products -maxdepth 3 -type f -o -type d | sort
+
+          echo ""
+          echo "=== App contents ==="
+          find build/Build/Products/Release-iphoneos/LiveActivitiesExample.app \
+            -maxdepth 3 -print | sort
+
+      - name: Verify Widget Extension
+        run: |
+          APP="build/Build/Products/Release-iphoneos/LiveActivitiesExample.app"
+
+          if find "$APP/PlugIns" -name "*.appex" -print -quit | grep -q .; then
+            echo "✅ Widget Extension found:"
+            find "$APP/PlugIns" -name "*.appex" -print
+          else
+            echo "❌ ERROR: No Widget Extension found inside app!"
+            exit 1
+          fi
+
+      - name: Create unsigned IPA
+        run: |
+          rm -rf Payload
+          mkdir Payload
 
           cp -R \
             build/Build/Products/Release-iphoneos/LiveActivitiesExample.app \
             Payload/
 
-          zip -r LiveActivitiesExample.ipa Payload
+          zip -r LiveActivitiesExample-unsigned.ipa Payload
+
+      - name: Inspect IPA
+        run: |
+          unzip -l LiveActivitiesExample-unsigned.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: LiveActivitiesExample-IPA
-          path: LiveActivitiesExample.ipa
-```
+          name: LiveActivitiesExample-unsigned-IPA
+          path: LiveActivitiesExample-unsigned.ipa
